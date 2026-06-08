@@ -1,0 +1,56 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  team-service:
+    build: ./team-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/team_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+    ports:
+      - "18083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  planning-service:
+    build: ./planning-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/planning_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      TEAM_SERVICE_URL: http://team-service:8083
+    ports:
+      - "18082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      team-service:
+        condition: service_started
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - team-service
+      - planning-service
+
+volumes:
+  postgres_data:
