@@ -213,6 +213,7 @@ If epics allocate 36 person-weeks to that team in the same quarter → 92% utili
 | GET | `/api/epics` | List all epics |
 | POST | `/api/epics` | Create epic |
 | GET | `/api/epics/by-initiative/{id}` | Epics for a given initiative |
+| GET | `/api/epics/by-team/{id}` | Epics for a given team |
 | PUT | `/api/epics/{id}` | Update epic |
 | DELETE | `/api/epics/{id}` | Delete epic |
 | GET | `/api/capacity/summary?startDate=&endDate=` | Cross-team capacity vs. allocation |
