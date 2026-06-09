@@ -32,6 +32,11 @@ public class EpicController {
         return epicService.findByInitiative(initiativeId);
     }
 
+    @GetMapping("/by-team/{teamId}")
+    public List<EpicDto> getByTeam(@PathVariable UUID teamId) {
+        return epicService.findByTeam(teamId);
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public EpicDto create(@Valid @RequestBody EpicDto dto) {
