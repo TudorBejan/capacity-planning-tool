@@ -1,0 +1,12 @@
+# IDE
+.idea/
+
+# Environment
+frontend/.env
+
+# Dependencies
+frontend/node_modules/
+
+# Build output
+planning-service/target/
+team-service/target/
