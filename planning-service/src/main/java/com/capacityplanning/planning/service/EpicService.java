@@ -34,6 +34,10 @@ public class EpicService {
         return epicRepository.findByInitiativeId(initiativeId).stream().map(this::toDto).toList();
     }
 
+    public List<EpicDto> findByTeam(UUID teamId) {
+        return epicRepository.findByTeamId(teamId).stream().map(this::toDto).toList();
+    }
+
     @Transactional
     public EpicDto create(EpicDto dto) {
         Initiative initiative = initiativeRepository.findById(dto.initiativeId())
