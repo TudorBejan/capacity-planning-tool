@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { link } from 'svelte-spa-router';
-  import { getTeam, getPersonsByTeam, createPerson, updatePerson, deletePerson, getTeamCapacity } from '../lib/api.js';
+  import { getTeam, getPersonsByTeam, createPerson, updatePerson, deletePerson, getTeamCapacity, getEpicsByTeam, getCapacitySummary } from '../lib/api.js';
   import Modal from '../components/Modal.svelte';
   import CapacityBar from '../components/CapacityBar.svelte';
 
@@ -10,7 +10,9 @@
 
   let team = null;
   let persons = [];
+  let epics = [];
   let capacity = null;
+  let teamAllocation = null;
   let loading = true;
   let error = null;
   let showModal = false;
@@ -19,8 +21,11 @@
   const now = new Date();
   const qStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
   const qEnd   = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3 + 3, 0);
-  let startDate = qStart.toISOString().slice(0, 10);
-  let endDate   = qEnd.toISOString().slice(0, 10);
+
+  // Read dates from query string when navigating from Dashboard, fall back to current quarter
+  const qs = new URLSearchParams(window.location.hash.includes('?') ? window.location.hash.split('?')[1] : '');
+  let startDate = qs.get('start') || qStart.toISOString().slice(0, 10);
+  let endDate   = qs.get('end')   || qEnd.toISOString().slice(0, 10);
 
   const emptyPerson = () => ({ teamId: id, name: '', role: '', availabilityPercentage: 100 });
   let personForm = emptyPerson();
@@ -34,11 +39,19 @@
       await loadCapacity();
     } catch (e) { error = e.message; }
     finally { loading = false; }
+    try { epics = await getEpicsByTeam(id); }
+    catch { epics = []; }
   }
 
   async function loadCapacity() {
-    try { capacity = await getTeamCapacity(id, startDate, endDate); }
-    catch (e) { capacity = null; }
+    try {
+      const [cap, summary] = await Promise.all([
+        getTeamCapacity(id, startDate, endDate),
+        getCapacitySummary(startDate, endDate),
+      ]);
+      capacity = cap;
+      teamAllocation = summary.teamAllocations.find(t => t.teamId === id) ?? null;
+    } catch (e) { capacity = null; teamAllocation = null; }
   }
 
   function openCreate() { personForm = emptyPerson(); editingPerson = null; showModal = true; }
@@ -63,6 +76,17 @@
     try { await deletePerson(p.id); persons = await getPersonsByTeam(id); await loadCapacity(); }
     catch (e) { alert(e.message); }
   }
+
+  $: filteredEpics = epics.filter(e =>
+    (e.startDate == null || e.startDate <= endDate) &&
+    (e.dueDate   == null || e.dueDate   >= startDate)
+  );
+  $: totalWeeks = filteredEpics.reduce((sum, e) => sum + Number(e.estimatedWeeks), 0);
+  $: utilization = teamAllocation
+    ? Number(teamAllocation.utilizationPercentage)
+    : capacity && Number(capacity.netCapacityWeeks) > 0
+      ? (totalWeeks / Number(capacity.netCapacityWeeks)) * 100
+      : 0;
 
   $: availPct = capacity
     ? ((Number(capacity.netCapacityWeeks)) / (Number(capacity.workingWeeksInPeriod) * Number(capacity.totalFte)) * 100)
@@ -116,18 +140,68 @@
             <div class="cap-val">{Number(capacity.netCapacityWeeks).toFixed(1)}</div>
             <div class="cap-label">Net capacity (weeks)</div>
           </div>
+          <div class="card cap-card">
+            <div class="cap-val">{totalWeeks.toFixed(1)}</div>
+            <div class="cap-label">Epics estimated (weeks)</div>
+          </div>
         </div>
         <div class="card" style="margin-top:1rem;padding:1rem">
-          <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem">
-            Formula: Σ(availability%) × (1 − overhead%) × working weeks
-          </p>
-          <CapacityBar utilization={100 - team.overheadPercentage} />
-          <p style="font-size:0.72rem;color:var(--text-muted);margin-top:0.4rem">
-            {100 - team.overheadPercentage}% of raw FTE-weeks are available for project work
-          </p>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+            <p style="font-size:0.8rem;color:var(--text-muted);margin:0">
+              Epics estimated vs. net capacity
+            </p>
+            <span class="badge {utilization >= 90 ? 'badge-red' : utilization >= 70 ? 'badge-yellow' : 'badge-green'}">
+              {utilization.toFixed(0)}%
+            </span>
+          </div>
+          <CapacityBar
+            utilization={utilization}
+            capacityWeeks={Number(capacity.netCapacityWeeks)}
+            allocatedWeeks={teamAllocation ? Number(teamAllocation.allocatedWeeks) : totalWeeks}
+          />
         </div>
       {/if}
     </div>
+
+    <!-- Epics section -->
+    <div class="section-header" style="margin-bottom:1rem">
+      <h2>Epics ({filteredEpics.length}{filteredEpics.length !== epics.length ? ` of ${epics.length}` : ''})</h2>
+    </div>
+    {#if filteredEpics.length === 0}
+      <div class="card empty">{epics.length === 0 ? 'No epics assigned to this team.' : 'No epics fall within the selected date range.'}</div>
+    {:else}
+      <div class="card" style="padding:0;overflow:hidden;margin-bottom:2rem">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Status</th>
+              <th>Estimate (weeks)</th>
+              <th>Start</th>
+              <th>Due</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each filteredEpics as epic}
+              <tr>
+                <td style="font-weight:600">{epic.name}</td>
+                <td><span class="badge badge-{epic.status.toLowerCase().replace('_','-')}">{epic.status}</span></td>
+                <td>{epic.estimatedWeeks}</td>
+                <td style="color:var(--text-muted)">{epic.startDate ?? '—'}</td>
+                <td style="color:var(--text-muted)">{epic.dueDate ?? '—'}</td>
+              </tr>
+            {/each}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="2" style="color:var(--text-muted);font-size:0.8rem">Total</td>
+              <td style="font-weight:700">{totalWeeks.toFixed(1)}</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    {/if}
 
     <!-- Members section -->
     <div class="section-header" style="margin-top:2rem;margin-bottom:1rem">
@@ -201,4 +275,6 @@
   .cap-label { font-size:0.75rem; color:var(--text-muted); margin-top:4px; }
   .section-header { display:flex; justify-content:space-between; align-items:center; }
   .capacity-section { margin-bottom:1.5rem; }
+  .weeks-badge { background:var(--accent); color:#fff; font-size:0.78rem; font-weight:600; padding:0.25rem 0.7rem; border-radius:999px; }
+  tfoot td { border-top:2px solid var(--border); background:var(--surface); padding:0.6rem 1rem; }
 </style>
