@@ -37,6 +37,7 @@ export const deleteInitiative = (id) => req(`${PLANNING_BASE}/api/initiatives/${
 // ── Epics ────────────────────────────────────────────────────────────────────
 export const getEpics = () => req(`${PLANNING_BASE}/api/epics`);
 export const getEpicsByInitiative = (id) => req(`${PLANNING_BASE}/api/epics/by-initiative/${id}`);
+export const getEpicsByTeam       = (id) => req(`${PLANNING_BASE}/api/epics/by-team/${id}`);
 export const createEpic = (data) => req(`${PLANNING_BASE}/api/epics`, { method: 'POST', body: data });
 export const updateEpic = (id, data) => req(`${PLANNING_BASE}/api/epics/${id}`, { method: 'PUT', body: data });
 export const deleteEpic = (id) => req(`${PLANNING_BASE}/api/epics/${id}`, { method: 'DELETE' });
