@@ -157,7 +157,7 @@
         {#each summary.teamAllocations as team}
           <div class="card capacity-card">
             <div class="team-card-header">
-              <a href="/teams/{team.teamId}" use:link class="team-name">{team.teamName}</a>
+              <a href="/teams/{team.teamId}?start={startDate}&end={endDate}" use:link class="team-name">{team.teamName}</a>
               <span class="badge {team.utilizationPercentage >= 90 ? 'badge-red' : team.utilizationPercentage >= 70 ? 'badge-yellow' : 'badge-green'}">
                 {team.utilizationPercentage.toFixed(0)}%
               </span>
